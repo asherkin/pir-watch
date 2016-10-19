@@ -1,6 +1,19 @@
 /**
  * pir-watch.c
  *
+ * Publishes messages to a Redis pub/sub channel when motion is detected by a GPIO-attached PIR sensor.
+ *
+ * Compile:
+ *   clang -O3 -Wall -Wextra -pedantic `pkg-config --cflags --libs hiredis` pir-watch.c -o pir-watch
+ *
+ * Requires a suitible C compiler, pkg-config, and the hiredis library to be installed.
+ *
+ * Usage:
+ *   ./pir-watch 1016 127.0.0.1 6379 sensors.motion.door 1
+ *
+ * This publishes "1" to a pub/sub channel named "sensors.motion.door" on 127.0.0.1:6379 when GPIO pin 1016 is triggered.
+ * The GPIO pin must be exported and setup as an input with rising edge detection before starting pir-watch.
+ *
  * Copyright (c) 2016 Asher J.D. Baker
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
