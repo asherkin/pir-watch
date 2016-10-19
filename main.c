@@ -1,9 +1,25 @@
+#include <hiredis.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+int is_numeric(const char *input)
+{
+  for (unsigned i = 0; i < strlen(input); ++i) {
+    if (isdigit(input[i]) != 0) {
+      continue;
+    }
+
+    return 0;
+  }
+
+  return 1;
+}
 
 int gpio_get_config(const char *gpio, const char *config)
 {
@@ -20,7 +36,8 @@ int gpio_get_config(const char *gpio, const char *config)
   if (value == EOF) {
     if (ferror(configFile) != 0) {
       fprintf(stderr, "Failed to read GPIO %s config. (%s)\n", config, strerror(errno));
-    } else {
+    }
+    else {
       fprintf(stderr, "Failed to read GPIO %s config. (No data)\n", config);
     }
 
@@ -35,19 +52,33 @@ int gpio_get_config(const char *gpio, const char *config)
 
 int main(int argc, char *argv[])
 {
-  if (argc <= 1) {
-    fprintf(stderr, "Usage: %s <gpio>\n", argv[0]);
+  if (argc <= 1 || (argc > 2 && argc <= 5)) {
+    fprintf(stderr, "Usage: %s <gpio pin> [<redis server> <port> <channel> <message>]\n", argv[0]);
     return 1;
   }
 
-  char *gpio = argv[1];
-  for (unsigned i = 0; i < strlen(gpio); ++i) {
-    if (isdigit(gpio[i]) != 0) {
-      continue;
-    }
-
+  const char *gpio = argv[1];
+  if (is_numeric(gpio) == 0) {
     fprintf(stderr, "GPIO pin not numeric. (%s)\n", gpio);
     return 1;
+  }
+
+  const char *redisServer = NULL;
+  int redisPort = 0;
+  const char *redisChannel = NULL;
+  const char *redisMessage = NULL;
+
+  if (argc > 5) {
+    const char *redisPortString = argv[3];
+    if (is_numeric(redisPortString) == 0) {
+      fprintf(stderr, "Redis port not numeric. (%s)\n", redisPortString);
+      return 1;
+    }
+
+    redisServer = argv[2];
+    redisPort = atoi(redisPortString);
+    redisChannel = argv[4];
+    redisMessage = argv[5];
   }
 
   char filename[64];
@@ -83,7 +114,8 @@ int main(int argc, char *argv[])
   if (value == EOF) {
     if (ferror(valueFile) != 0) {
       fprintf(stderr, "Failed to read GPIO value. (%s)\n", strerror(errno));
-    } else {
+    }
+    else {
       fprintf(stderr, "Failed to read GPIO value. (No data)\n");
     }
 
@@ -94,6 +126,24 @@ int main(int argc, char *argv[])
   // Read to EOF to consume all data before we start waiting.
   while (fgetc(valueFile) != EOF) {
     // Do nothing.
+  }
+
+  redisContext *redis = NULL;
+  if (redisServer) {
+    redis = redisConnect(redisServer, redisPort);
+    if (!redis || redis->err) {
+      if (redis) {
+        fprintf(stderr, "Unable to connect to Redis. (%s)\n", redis->errstr);
+
+        redisFree(redis);
+      }
+      else {
+        fprintf(stderr, "Unable to allocate Redis context\n");
+      }
+
+      fclose(valueFile);
+      return 1;
+    }
   }
 
   while (1) {
@@ -120,12 +170,27 @@ int main(int argc, char *argv[])
 
     // If the input is high, we've detected motion.
     if (value == '1') {
+      if (redis) {
+        redisReply *reply = redisCommand(redis, "PUBLISH %s %s", redisChannel, redisMessage);
+
+        if (!reply) {
+          fprintf(stderr, "Failed to send PUBLISH command to Redis. (%s)\n", redis->errstr);
+          break;
+        }
+
+        freeReplyObject(reply);
+      }
+
       fprintf(stdout, ".");
       fflush(stdout);
     }
   }
 
   fprintf(stdout, "\n");
+
+  if (redis) {
+    redisFree(redis);
+  }
 
   fclose(valueFile);
 
