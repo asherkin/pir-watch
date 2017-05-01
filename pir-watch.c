@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
 
         if (!reply) {
           fprintf(stderr, "Failed to send PUBLISH command to Redis. (%s)\n", redis->errstr);
-          break;
+          continue;
         }
 
         freeReplyObject(reply);
