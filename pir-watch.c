@@ -45,6 +45,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 int is_numeric(const char *input)
 {
@@ -90,6 +91,8 @@ int gpio_get_config(const char *gpio, const char *config)
 
 int main(int argc, char *argv[])
 {
+  signal(SIGPIPE, SIG_IGN);
+
   if (argc <= 1 || (argc > 2 && argc <= 5)) {
     fprintf(stderr, "Usage: %s <gpio pin> [<redis server> <port> <channel> <message>]\n", argv[0]);
     return 1;
