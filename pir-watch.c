@@ -187,6 +187,8 @@ int main(int argc, char *argv[])
     }
   }
 
+  int failed = 0;
+
   while (1) {
     struct pollfd fdset;
     fdset.fd = fileno(valueFile);
@@ -197,6 +199,7 @@ int main(int argc, char *argv[])
 
     if (pollret < 0) {
       fprintf(stderr, "Failed to poll for GPIO value. (%s)\n", strerror(errno));
+      failed = 1;
       break;
     }
 
@@ -216,7 +219,8 @@ int main(int argc, char *argv[])
 
         if (!reply) {
           fprintf(stderr, "Failed to send PUBLISH command to Redis. (%s)\n", redis->errstr);
-          continue;
+          failed = 1;
+          break;
         }
 
         freeReplyObject(reply);
@@ -232,6 +236,6 @@ int main(int argc, char *argv[])
 
   fclose(valueFile);
 
-  return 0;
+  return failed ? 1 : 0;
 }
 
